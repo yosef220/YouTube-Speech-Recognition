@@ -113,6 +113,7 @@
   <div class="stage">
     <div class="modes" role="group" aria-label="מצב חיפוש">
       <button id="mWords" aria-pressed="true">מילים</button>
+      <button id="mSing" aria-pressed="false">שירה</button>
       <button id="mHum" aria-pressed="false">זמזום</button>
     </div>
 
@@ -154,19 +155,26 @@
   const mic = $('mic'), statusEl = $('status'), heardEl = $('heard'), resultsEl = $('results');
   let mode = 'words', live = false, recog = null, audioCtx = null, analyser = null, stream = null, raf = 0;
   let recorder = null, chunks = [];
+  let singBuffer = '', singTimer = 0;           // singing mode: accumulate across pauses
+  const SING_WINDOW_MS = 15000;                 // 15s listening window for a sung snippet
 
   /* ---------- mode switch ---------- */
+  const MODE_HINT = {
+    words: 'לחץ על הכפתור ואמור משפט מהשיר',
+    sing:  'מצב שירה: שיר 12–15 שניות; אוסף את כל המילים גם עם הפסקות ומשווה למילות השיר',
+    hum:   'מצב זמזום: הקלט 8–12 שניות; ההקלטה תישלח לשרת ההתאמה'
+  };
   function setMode(m){
     mode = m;
     $('mWords').setAttribute('aria-pressed', m === 'words');
+    $('mSing').setAttribute('aria-pressed', m === 'sing');
     $('mHum').setAttribute('aria-pressed', m === 'hum');
-    statusEl.textContent = m === 'words'
-      ? 'לחץ על הכפתור והתחל לדבר'
-      : 'מצב זמזום: הקלט 8–12 שניות; ההקלטה תישלח לשרת ההתאמה';
+    statusEl.textContent = MODE_HINT[m];
     heardEl.textContent = '';
     resultsEl.innerHTML = '';
   }
   $('mWords').onclick = () => setMode('words');
+  $('mSing').onclick = () => setMode('sing');
   $('mHum').onclick = () => setMode('hum');
 
   /* ---------- the ring ---------- */
@@ -224,6 +232,13 @@
 
     const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
     if (!SR){ statusEl.textContent = 'הדפדפן הזה לא תומך בזיהוי דיבור. נסה כרום.'; stop(); return; }
+
+    if (mode === 'sing'){
+      startSinging(SR);
+      return;
+    }
+
+    // ---- words: single clear phrase ----
     recog = new SR();
     recog.lang = 'he-IL';
     recog.interimResults = true;
@@ -239,11 +254,52 @@
     statusEl.textContent = 'מקשיב…';
   }
 
+  /* ---------- singing: continuous accumulation over a window ---------- */
+  function startSinging(SR){
+    singBuffer = '';
+    recog = new SR();
+    recog.lang = 'he-IL';
+    recog.interimResults = true;
+    recog.continuous = true;               // don't cut off at the first silence between lines
+
+    recog.onresult = e => {
+      let finalized = '';
+      for (let i = e.resultIndex; i < e.results.length; i++){
+        if (e.results[i].isFinal) finalized += e.results[i][0].transcript + ' ';
+      }
+      if (finalized) singBuffer = (singBuffer + ' ' + finalized).trim();
+      const interim = Array.from(e.results).filter(r => !r.isFinal)
+        .map(r => r[0].transcript).join(' ');
+      heardEl.textContent = (singBuffer + ' ' + interim).trim();
+    };
+    // A sung snippet has gaps; the API fires onend during them. While we're still
+    // inside the window, just restart so accumulation continues seamlessly.
+    recog.onend = () => { if (live && mode === 'sing') { try { recog.start(); } catch {} } };
+    recog.onerror = e => {
+      if (e.error === 'no-speech' || e.error === 'aborted') return;   // transient during pauses
+      statusEl.textContent = 'שגיאת זיהוי (' + e.error + ').';
+    };
+    recog.start();
+
+    const secsLeft = Math.round(SING_WINDOW_MS / 1000);
+    statusEl.textContent = 'שיר עכשיו… (' + secsLeft + ' שניות, אפשר גם לעצור ידנית)';
+    singTimer = setTimeout(() => { if (live) stop(); }, SING_WINDOW_MS);
+  }
+
   function stop(){
+    const wasSinging = (mode === 'sing');
     live = false; mic.dataset.live = '0'; mic.textContent = 'התחל';
+    if (singTimer){ clearTimeout(singTimer); singTimer = 0; }
     if (recog){ try{ recog.stop(); }catch{} recog = null; }
     if (recorder && recorder.state === 'recording') recorder.stop();
     else closeMic();
+
+    if (wasSinging){
+      const sung = singBuffer.trim();
+      heardEl.textContent = sung;
+      if (sung) lookupSinging(sung);
+      else statusEl.textContent = 'לא נקלטו מילים. נסה לשיר חזק וברור יותר.';
+    }
   }
 
   /* ---------- hum → matching server (or file fallback) ---------- */
@@ -310,6 +366,75 @@
     }
     render(hits);
     statusEl.textContent = 'בחר תוצאה כדי לפתוח ביוטיוב';
+  }
+
+  /* ---------- sung words → fuzzy match against lyrics → exact link ---------- */
+  // Singing produces a dirty transcript ("אני אוהב אותך" may come out
+  // "אני הולך אותך"). So we don't require an exact phrase: we pull lyric
+  // candidates from LRCLIB and score each by how many of the sung words appear
+  // in its lyrics. A few correct words is enough to lock onto the right song.
+  function normWords(text){
+    return text
+      .toLowerCase()
+      .replace(/[֑-ׇ]/g, '')        // strip Hebrew niqqud/cantillation
+      .replace(/[^\p{L}\p{N}\s]/gu, ' ')       // drop punctuation, keep letters/digits
+      .split(/\s+/).filter(w => w.length >= 2);
+  }
+  function lev(a, b){                           // small Levenshtein for 1-edit fuzz
+    if (Math.abs(a.length - b.length) > 1) return 2;
+    const d = Array.from({length: a.length + 1}, (_, i) => [i]);
+    for (let j = 0; j <= b.length; j++) d[0][j] = j;
+    for (let i = 1; i <= a.length; i++)
+      for (let j = 1; j <= b.length; j++)
+        d[i][j] = Math.min(
+          d[i-1][j] + 1, d[i][j-1] + 1,
+          d[i-1][j-1] + (a[i-1] === b[j-1] ? 0 : 1));
+    return d[a.length][b.length];
+  }
+  function overlapScore(sung, hayTokens){
+    const hay = new Set(hayTokens);
+    let matched = 0;
+    for (const w of sung){
+      if (hay.has(w)) { matched++; continue; }
+      // light fuzz: accept a lyric token within one edit (catches mis-hearings)
+      for (const h of hay){ if (Math.abs(h.length - w.length) <= 1 && lev(w, h) <= 1){ matched++; break; } }
+    }
+    return matched;                             // absolute count of sung words found
+  }
+
+  async function lookupSinging(text){
+    statusEl.textContent = 'מזהה את השיר לפי המילים…';
+    const sung = [...new Set(normWords(text))];
+    if (sung.length < 2){ return lookup(text); }  // too little — treat as a plain phrase
+
+    let candidates = [];
+    try {
+      const r = await fetch('https://lrclib.net/api/search?q=' + encodeURIComponent(text));
+      if (r.ok) candidates = await r.json();
+    } catch {}
+
+    let best = null, bestScore = 0;
+    for (const c of (candidates || []).slice(0, 20)){
+      const hay = normWords([c.plainLyrics || '', c.trackName || '', c.artistName || ''].join(' '));
+      const score = overlapScore(sung, hay);
+      if (score > bestScore){ bestScore = score; best = c; }
+    }
+
+    // Need at least a couple of sung words to land in the lyrics to trust it.
+    if (best && bestScore >= Math.min(3, sung.length)){
+      const q = best.artistName + ' ' + best.trackName;
+      heardEl.textContent = best.trackName + ' — ' + best.artistName +
+        '  (' + bestScore + '/' + sung.length + ' מילים תואמות)';
+      const hits = await viaYouTubeApi(q) || await viaPiped(q);
+      if (hits && hits.length){ render(hits); statusEl.textContent = 'בחר תוצאה כדי לפתוח ביוטיוב'; return; }
+      statusEl.innerHTML = 'זוהה: <b>' + q + '</b>. ' +
+        '<a target="_blank" rel="noopener" href="https://www.youtube.com/results?search_query=' +
+        encodeURIComponent(q) + '">פתח ביוטיוב</a>';
+      return;
+    }
+    // No confident lyric hit — fall back to the plain text→link path.
+    statusEl.textContent = 'לא זוהה שיר ודאי מהמילים — מנסה חיפוש טקסט…';
+    lookup(text);
   }
 
   async function viaYouTubeApi(q){
