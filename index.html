@@ -1,0 +1,101 @@
+<!doctype html>
+<html lang="he" dir="rtl">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>חיפוש שיר בקול — הגד/שיר/זמזם ופתח ביוטיוב</title>
+  <meta name="description" content="לחצו, אמרו או שירו מילים מתוך שיר, והאפליקציה תפתח לכם את הסרטון המדויק ביוטיוב. חינמי, ללא התקנה." />
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <main class="app">
+    <header class="hero">
+      <h1>🎤 חיפוש שיר בקול</h1>
+      <p class="subtitle">לחצו על הכפתור, <strong>אמרו או שירו</strong> מילים מתוך השיר — ואני אפתח לכם את הסרטון המדויק ביוטיוב.</p>
+    </header>
+
+    <section class="modes" aria-label="בחירת מצב">
+      <button class="mode-btn is-active" data-mode="speech" type="button">🗣️ אמירת מילים</button>
+      <button class="mode-btn" data-mode="hum" type="button">🎵 זמזום / שירה</button>
+    </section>
+
+    <!-- Speech mode -->
+    <section id="panel-speech" class="panel">
+      <div class="mic-wrap">
+        <button id="micBtn" class="mic-btn" type="button" aria-live="polite">
+          <span class="mic-icon">🎙️</span>
+          <span class="mic-label">הקש כדי להקשיב</span>
+        </button>
+        <div id="listenPulse" class="pulse" hidden></div>
+      </div>
+
+      <label class="field">
+        <span>שפת הדיבור</span>
+        <select id="langSelect">
+          <option value="he-IL" selected>עברית</option>
+          <option value="en-US">English</option>
+          <option value="ar-SA">العربية</option>
+          <option value="es-ES">Español</option>
+          <option value="ru-RU">Русский</option>
+          <option value="fr-FR">Français</option>
+        </select>
+      </label>
+
+      <label class="field">
+        <span>מה שמעתי (אפשר לתקן)</span>
+        <input id="transcript" type="text" placeholder="למשל: עוד יבוא שלום עלינו…" />
+      </label>
+
+      <button id="searchBtn" class="primary-btn" type="button">🔎 מצא ופתח ביוטיוב</button>
+
+      <p id="hint" class="hint">טיפ: אמרו שורה שלמה מהשיר לתוצאה מדויקת יותר. עובד הכי טוב ב-Chrome / Edge.</p>
+    </section>
+
+    <!-- Hum mode -->
+    <section id="panel-hum" class="panel" hidden>
+      <div class="mic-wrap">
+        <button id="humBtn" class="mic-btn hum" type="button">
+          <span class="mic-icon">🎵</span>
+          <span class="mic-label">הקש כדי לזמזם</span>
+        </button>
+        <div id="humPulse" class="pulse" hidden></div>
+      </div>
+      <audio id="humPlayback" controls hidden></audio>
+      <button id="recognizeBtn" class="primary-btn" type="button" hidden>🔎 זהה את המנגינה</button>
+      <p class="hint">
+        זיהוי מנגינה אמיתי דורש שירות חיצוני. הוסיפו מפתח <strong>AudD</strong> חינמי בהגדרות
+        (⚙️) כדי להפעיל את הזיהוי. ללא מפתח — נסו את מצב "אמירת מילים".
+      </p>
+    </section>
+
+    <!-- Results -->
+    <section id="results" class="results" hidden>
+      <h2>תוצאות</h2>
+      <ul id="resultsList"></ul>
+    </section>
+
+    <div id="status" class="status" role="status" aria-live="polite"></div>
+
+    <button id="settingsToggle" class="settings-toggle" type="button" title="הגדרות">⚙️ הגדרות (אופציונלי)</button>
+    <section id="settings" class="settings" hidden>
+      <h2>הגדרות אופציונליות</h2>
+      <p class="hint">הכול נשמר מקומית בדפדפן שלכם בלבד. האפליקציה עובדת גם בלי אף מפתח.</p>
+      <label class="field">
+        <span>מפתח YouTube Data API (לדיוק גבוה יותר בתוצאות — אופציונלי)</span>
+        <input id="ytKey" type="password" placeholder="AIza…" autocomplete="off" />
+      </label>
+      <label class="field">
+        <span>מפתח AudD API (לזיהוי זמזום/מנגינה — אופציונלי)</span>
+        <input id="auddKey" type="password" placeholder="AudD token" autocomplete="off" />
+      </label>
+      <button id="saveSettings" class="secondary-btn" type="button">שמור</button>
+    </section>
+
+    <footer class="foot">
+      <p>נפתח ישירות ל‑<code>youtube.com/watch?v=…</code> · ללא עלות · ללא שרת · אפשר לארח ב‑GitHub Pages</p>
+    </footer>
+  </main>
+
+  <script src="app.js"></script>
+</body>
+</html>
