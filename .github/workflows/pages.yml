@@ -26,6 +26,10 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: actions/configure-pages@v5
+        with:
+          # Create the Pages site automatically on first run if the repo allows
+          # it, so no manual Settings toggle is needed.
+          enablement: true
       - name: Upload web/ as the Pages artifact
         uses: actions/upload-pages-artifact@v3
         with:

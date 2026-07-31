@@ -153,6 +153,14 @@
 (() => {
   const $ = id => document.getElementById(id);
   const mic = $('mic'), statusEl = $('status'), heardEl = $('heard'), resultsEl = $('results');
+
+  // Hum-server URL: ?server=… in the link wins, else the last value you typed,
+  // else the localhost default. Lets a deployed page ship with the HF Space baked in.
+  const humServerEl = $('humServer');
+  const presetServer = new URLSearchParams(location.search).get('server') || localStorage.getItem('humServer');
+  if (presetServer) humServerEl.value = presetServer;
+  humServerEl.addEventListener('change', () => localStorage.setItem('humServer', humServerEl.value.trim()));
+
   let mode = 'words', live = false, recog = null, audioCtx = null, analyser = null, stream = null, raf = 0;
   let recorder = null, chunks = [];
   let singBuffer = '', singTimer = 0;           // singing mode: accumulate across pauses

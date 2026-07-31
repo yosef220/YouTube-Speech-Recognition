@@ -101,7 +101,7 @@ python ingest.py --playlist playlist.txt --out ../db
 לכל שיר: `yt-dlp` מוריד אודיו → Demucs מבודד את השירה → CREPE מחלץ עקומת פיץ'
 → נרמול לחצי-טונים עם החסרת חציון (אי-תלות בסולם) → נשמר ב-`db/`.
 
-### ב. הפעלת שרת ההתאמה
+### ב. הפעלת שרת ההתאמה — מקומית
 
 ```bash
 cd server
@@ -112,6 +112,28 @@ uvicorn app:app --port 8000
 בפרונטאנד, תחת ⚙️, ודאו שכתובת "שרת הזמזום" מצביעה לשרת (ברירת מחדל
 `http://localhost:8000`). עכשיו מצב **זמזום** יקליט 8–12 שניות, ישלח ל-`POST /hum`,
 ויציג את ההתאמות המובילות עם קישורי היוטיוב המדויקים.
+
+### ג. פריסה חינם ל-Hugging Face Space (Docker)
+
+תיקיית `server/` היא Space מוכן לפריסה (Dockerfile + `README.md` עם frontmatter).
+בטייר ה-CPU החינמי לא מותקן torch — `melody.py` נופל אוטומטית ל-`librosa.pyin`,
+כך שהאימג' קטן והעלייה מהירה.
+
+1. צרו Space חדש → **SDK: Docker** → **Hardware: CPU basic (free)**.
+2. דחפו את תוכן `server/` ל-repo של ה-Space:
+   ```bash
+   git clone https://huggingface.co/spaces/<user>/<space> hf-space
+   cp server/* server/.dockerignore hf-space/
+   cd hf-space && git add -A && git commit -m "HumFinder server" && git push
+   ```
+   ה-Space יבנה ויעלה בכתובת `https://<user>-<space>.hf.space` (כתובת **https**,
+   ולכן אתר ה-GitHub Pages יכול לקרוא לה בלי חסימת mixed-content).
+3. בעמוד, תחת ⚙️, הזינו את כתובת ה-`hf.space` בשדה "שרת הזמזום". אפשר גם להטמיע
+   אותה בקישור: `…github.io/<repo>/?server=https://<user>-<space>.hf.space`.
+
+`POST /hum` יחזיר **503** עד שיהיה מסד. בנו אותו מקומית (שלב א') והוסיפו את
+`db/melodies.npy` + `db/meta.json` ל-repo של ה-Space, או העלו אותם ל-`/app/db`
+דרך אחסון קבוע. פרטים נוספים ב-[`server/README.md`](server/README.md).
 
 ### למה זה מדויק
 - **subsequence-DTW** (ולא DTW רגיל): מזמזמים קטע מאמצע השיר, והאלגוריתם מאתר את
