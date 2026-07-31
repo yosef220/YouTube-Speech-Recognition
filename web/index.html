@@ -1,0 +1,365 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>HumFinder — מצא את השיר</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Suez+One&family=Assistant:wght@300;400;600&family=IBM+Plex+Mono:wght@400&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --plum:#241B2F;
+    --plum-lift:#2F2440;
+    --rose:#FF7A8A;
+    --gold:#E8C468;
+    --lilac:#EDE6F2;
+    --muted:#9C8FAE;
+    --line:rgba(237,230,242,.14);
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;padding:0}
+  body{
+    background:
+      radial-gradient(120% 80% at 50% -10%, #33253F 0%, var(--plum) 55%) fixed,
+      var(--plum);
+    color:var(--lilac);
+    font-family:"Assistant",system-ui,sans-serif;
+    font-weight:300;
+    min-height:100vh;
+    display:flex;justify-content:center;
+    padding:32px 20px 60px;
+  }
+  .wrap{width:100%;max-width:620px}
+
+  header{text-align:center;margin-bottom:38px}
+  .eyebrow{
+    font-family:"IBM Plex Mono",monospace;font-size:11px;letter-spacing:.22em;
+    color:var(--muted);text-transform:uppercase;direction:ltr;
+  }
+  h1{
+    font-family:"Suez One",serif;font-weight:400;
+    font-size:clamp(34px,8vw,52px);line-height:1.05;margin:10px 0 8px;
+  }
+  h1 em{font-style:normal;color:var(--rose)}
+  .sub{color:var(--muted);font-size:15px;margin:0}
+
+  /* ── signature: the listening ring ── */
+  .stage{display:flex;flex-direction:column;align-items:center;gap:18px}
+  .ring{position:relative;width:252px;height:252px}
+  canvas{position:absolute;inset:0;width:100%;height:100%}
+  .mic{
+    position:absolute;inset:46px;border-radius:50%;
+    border:1px solid var(--line);
+    background:linear-gradient(180deg,var(--plum-lift),#251C31);
+    color:var(--lilac);font-family:"Suez One",serif;font-size:19px;
+    cursor:pointer;transition:transform .18s ease,border-color .18s ease;
+  }
+  .mic:hover{transform:scale(1.03);border-color:var(--rose)}
+  .mic:focus-visible{outline:2px solid var(--gold);outline-offset:4px}
+  .mic[data-live="1"]{border-color:var(--rose);color:var(--rose)}
+
+  .modes{display:flex;gap:6px;padding:4px;border:1px solid var(--line);border-radius:999px}
+  .modes button{
+    background:none;border:0;color:var(--muted);cursor:pointer;
+    padding:8px 20px;border-radius:999px;font-family:"Assistant";font-size:14px;
+  }
+  .modes button[aria-pressed="true"]{background:var(--rose);color:#241B2F;font-weight:600}
+  .modes button:focus-visible{outline:2px solid var(--gold);outline-offset:2px}
+
+  .status{min-height:24px;font-size:14px;color:var(--muted);text-align:center}
+  .heard{
+    font-family:"Suez One",serif;font-size:22px;color:var(--gold);
+    text-align:center;min-height:30px;
+  }
+
+  /* ── results ── */
+  .results{margin-top:32px;display:flex;flex-direction:column;gap:1px}
+  .hit{
+    display:flex;align-items:center;gap:14px;width:100%;text-align:right;
+    background:rgba(237,230,242,.04);border:0;border-bottom:1px solid var(--line);
+    color:var(--lilac);padding:14px 12px;cursor:pointer;font-family:"Assistant";
+    transition:background .15s ease;
+  }
+  .hit:hover{background:rgba(255,122,138,.12)}
+  .hit:focus-visible{outline:2px solid var(--gold);outline-offset:-2px}
+  .hit img{width:76px;height:44px;object-fit:cover;border-radius:3px;flex:none;background:#000}
+  .hit .t{flex:1;min-width:0}
+  .hit .t b{display:block;font-weight:600;font-size:15px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .hit .t span{font-size:13px;color:var(--muted)}
+  .hit .go{font-family:"IBM Plex Mono",monospace;font-size:11px;color:var(--rose);direction:ltr}
+
+  details{margin-top:36px;border-top:1px solid var(--line);padding-top:14px}
+  summary{cursor:pointer;color:var(--muted);font-size:13px}
+  details input{
+    width:100%;margin-top:12px;padding:10px;background:transparent;
+    border:1px solid var(--line);border-radius:6px;color:var(--lilac);
+    font-family:"IBM Plex Mono",monospace;font-size:12px;direction:ltr;
+  }
+  details p{font-size:13px;color:var(--muted);line-height:1.6}
+  a{color:var(--rose)}
+  @media (prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header>
+    <div class="eyebrow">hum · sing · say</div>
+    <h1>איזה שיר <em>זה</em> היה?</h1>
+    <p class="sub">תגיד או תשיר משפט מהשיר — ונפתח לך אותו ביוטיוב.</p>
+  </header>
+
+  <div class="stage">
+    <div class="modes" role="group" aria-label="מצב חיפוש">
+      <button id="mWords" aria-pressed="true">מילים</button>
+      <button id="mHum" aria-pressed="false">זמזום</button>
+    </div>
+
+    <div class="ring">
+      <canvas id="viz" width="504" height="504" aria-hidden="true"></canvas>
+      <button class="mic" id="mic">התחל</button>
+    </div>
+
+    <div class="heard" id="heard"></div>
+    <div class="status" id="status">לחץ על הכפתור והתחל לדבר</div>
+  </div>
+
+  <div class="results" id="results"></div>
+
+  <details>
+    <summary>הגדרות ומידע</summary>
+    <p>
+      ברירת המחדל עובדת בלי שום מפתח, דרך מופעי Piped ציבוריים. הם נופלים לפעמים.
+      למי שרוצה יציבות: הדבק כאן מפתח YouTube Data API v3 חינמי
+      (10,000 יחידות ביום ≈ 100 חיפושים). המפתח נשמר בזיכרון הדף בלבד ונמחק ברענון.
+    </p>
+    <input id="ytKey" placeholder="YouTube Data API key (optional)" autocomplete="off">
+    <p style="margin-top:14px">
+      כתובת שרת הזמזום (שלב 2). ברירת מחדל: <code>http://localhost:8000</code>.
+      אם השרת פועל — מצב הזמזום ישלח אליו את ההקלטה ויקבל התאמה אוטומטית.
+    </p>
+    <input id="humServer" placeholder="http://localhost:8000" autocomplete="off" value="http://localhost:8000">
+    <p style="margin-top:14px">
+      נדרש מיקרופון, ולכן הדף חייב לרוץ מעל <code>https</code> או <code>localhost</code>.
+      זיהוי הדיבור עובד בכרום ובאדג'. מצב הזמזום דורש את שרת ה־Python משלב 2 בתוכנית.
+    </p>
+  </details>
+
+</div>
+
+<script>
+(() => {
+  const $ = id => document.getElementById(id);
+  const mic = $('mic'), statusEl = $('status'), heardEl = $('heard'), resultsEl = $('results');
+  let mode = 'words', live = false, recog = null, audioCtx = null, analyser = null, stream = null, raf = 0;
+  let recorder = null, chunks = [];
+
+  /* ---------- mode switch ---------- */
+  function setMode(m){
+    mode = m;
+    $('mWords').setAttribute('aria-pressed', m === 'words');
+    $('mHum').setAttribute('aria-pressed', m === 'hum');
+    statusEl.textContent = m === 'words'
+      ? 'לחץ על הכפתור והתחל לדבר'
+      : 'מצב זמזום: הקלט 8–12 שניות; ההקלטה תישלח לשרת ההתאמה';
+    heardEl.textContent = '';
+    resultsEl.innerHTML = '';
+  }
+  $('mWords').onclick = () => setMode('words');
+  $('mHum').onclick = () => setMode('hum');
+
+  /* ---------- the ring ---------- */
+  const cvs = $('viz'), ctx = cvs.getContext('2d');
+  const BARS = 72, R = 252, CX = 252, CY = 252;
+  function draw(){
+    ctx.clearRect(0,0,504,504);
+    let data = null;
+    if (analyser){ data = new Uint8Array(analyser.frequencyBinCount); analyser.getByteFrequencyData(data); }
+    for (let i = 0; i < BARS; i++){
+      const a = (i / BARS) * Math.PI * 2 - Math.PI / 2;
+      const v = data ? data[Math.floor(i * data.length / BARS / 2)] / 255 : 0;
+      const inner = R - 78, outer = inner + 10 + v * 62;
+      ctx.beginPath();
+      ctx.moveTo(CX + Math.cos(a)*inner, CY + Math.sin(a)*inner);
+      ctx.lineTo(CX + Math.cos(a)*outer, CY + Math.sin(a)*outer);
+      ctx.strokeStyle = live ? `rgba(255,122,138,${.25 + v*.75})` : 'rgba(237,230,242,.13)';
+      ctx.lineWidth = 3; ctx.lineCap = 'round'; ctx.stroke();
+    }
+    raf = requestAnimationFrame(draw);
+  }
+  draw();
+
+  /* ---------- mic ---------- */
+  async function openMic(){
+    stream = await navigator.mediaDevices.getUserMedia({ audio:true });
+    audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    analyser = audioCtx.createAnalyser();
+    analyser.fftSize = 512;
+    audioCtx.createMediaStreamSource(stream).connect(analyser);
+  }
+  function closeMic(){
+    if (stream) stream.getTracks().forEach(t => t.stop());
+    if (audioCtx) audioCtx.close();
+    stream = null; audioCtx = null; analyser = null;
+  }
+
+  mic.onclick = () => live ? stop() : start();
+
+  async function start(){
+    resultsEl.innerHTML = ''; heardEl.textContent = '';
+    try { await openMic(); }
+    catch { statusEl.textContent = 'אין גישה למיקרופון. בדוק את הרשאות הדפדפן.'; return; }
+    live = true; mic.dataset.live = '1'; mic.textContent = 'עצור';
+
+    if (mode === 'hum'){
+      chunks = [];
+      recorder = new MediaRecorder(stream);
+      recorder.ondataavailable = e => chunks.push(e.data);
+      recorder.onstop = saveHum;
+      recorder.start();
+      statusEl.textContent = 'מזמזם… 8–12 שניות זה האורך הטוב ביותר';
+      return;
+    }
+
+    const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (!SR){ statusEl.textContent = 'הדפדפן הזה לא תומך בזיהוי דיבור. נסה כרום.'; stop(); return; }
+    recog = new SR();
+    recog.lang = 'he-IL';
+    recog.interimResults = true;
+    recog.continuous = false;
+    recog.onresult = e => {
+      const txt = Array.from(e.results).map(r => r[0].transcript).join(' ').trim();
+      heardEl.textContent = txt;
+      if (e.results[e.results.length-1].isFinal){ stop(); if (txt) lookup(txt); }
+    };
+    recog.onerror = e => { statusEl.textContent = 'לא נקלט כלום (' + e.error + '). נסה שוב.'; stop(); };
+    recog.onend = () => { if (live) stop(); };
+    recog.start();
+    statusEl.textContent = 'מקשיב…';
+  }
+
+  function stop(){
+    live = false; mic.dataset.live = '0'; mic.textContent = 'התחל';
+    if (recog){ try{ recog.stop(); }catch{} recog = null; }
+    if (recorder && recorder.state === 'recording') recorder.stop();
+    else closeMic();
+  }
+
+  /* ---------- hum → matching server (or file fallback) ---------- */
+  async function saveHum(){
+    const blob = new Blob(chunks, { type:'audio/webm' });
+    closeMic();
+    const server = ($('humServer').value || '').trim().replace(/\/+$/, '');
+
+    if (server){
+      statusEl.textContent = 'שולח לשרת ההתאמה…';
+      try {
+        const fd = new FormData();
+        fd.append('file', blob, 'hum.webm');
+        const r = await fetch(server + '/hum', { method:'POST', body: fd });
+        if (!r.ok) throw new Error('HTTP ' + r.status);
+        const j = await r.json();
+        const hits = (j.matches || []).map(m => ({
+          id: m.videoId, title: m.title, by: (m.artist || '') +
+            (m.score != null ? '  ·  score ' + Number(m.score).toFixed(2) : ''), thumb: ''
+        }));
+        if (hits.length){ render(hits); statusEl.textContent = 'בחר תוצאה כדי לפתוח ביוטיוב'; return; }
+        statusEl.textContent = 'השרת לא מצא התאמה. נסה לזמזם ברור יותר.';
+        return;
+      } catch (err) {
+        statusEl.innerHTML = 'לא ניתן להגיע לשרת (' + err.message + '). ' + downloadLink(blob);
+        return;
+      }
+    }
+    statusEl.innerHTML = 'ההקלטה מוכנה. ' + downloadLink(blob) +
+      ' ושלח אותו ל־<code>POST /hum</code> של שרת ההתאמה משלב 2.';
+  }
+  function downloadLink(blob){
+    const url = URL.createObjectURL(blob);
+    return '<a href="' + url + '" download="hum.webm">הורד את הקובץ</a>';
+  }
+
+  /* ---------- text → exact YouTube link ---------- */
+  const PIPED = [
+    'https://pipedapi.kavin.rocks',
+    'https://api.piped.private.coffee',
+    'https://pipedapi.adminforge.de'
+  ];
+
+  async function lookup(text){
+    statusEl.textContent = 'מחפש…';
+    let query = '"' + text + '" שיר';
+
+    // אימות מול LRCLIB: אם מזוהה שיר, מחפשים לפי שם ואמן — הרבה יותר מדויק
+    try {
+      const r = await fetch('https://lrclib.net/api/search?q=' + encodeURIComponent(text));
+      if (r.ok){
+        const j = await r.json();
+        if (Array.isArray(j) && j.length) query = j[0].artistName + ' ' + j[0].trackName;
+      }
+    } catch {}
+
+    let hits = await viaYouTubeApi(query) || await viaPiped(query);
+
+    if (!hits || !hits.length){
+      statusEl.innerHTML = 'לא הצלחתי לשלוף תוצאה ישירה. ' +
+        '<a target="_blank" rel="noopener" href="https://www.youtube.com/results?search_query=' +
+        encodeURIComponent(query) + '">פתח חיפוש ביוטיוב</a>';
+      return;
+    }
+    render(hits);
+    statusEl.textContent = 'בחר תוצאה כדי לפתוח ביוטיוב';
+  }
+
+  async function viaYouTubeApi(q){
+    const key = $('ytKey').value.trim();
+    if (!key) return null;
+    try {
+      const u = 'https://www.googleapis.com/youtube/v3/search?part=snippet&type=video&maxResults=5&q='
+              + encodeURIComponent(q) + '&key=' + key;
+      const r = await fetch(u); if (!r.ok) return null;
+      const j = await r.json();
+      return (j.items || []).map(i => ({
+        id: i.id.videoId, title: i.snippet.title,
+        by: i.snippet.channelTitle, thumb: i.snippet.thumbnails.medium.url
+      }));
+    } catch { return null; }
+  }
+
+  async function viaPiped(q){
+    for (const base of PIPED){
+      try {
+        const r = await fetch(base + '/search?filter=videos&q=' + encodeURIComponent(q));
+        if (!r.ok) continue;
+        const j = await r.json();
+        const items = (j.items || []).filter(i => i.url && i.url.includes('watch?v=')).slice(0,5);
+        if (!items.length) continue;
+        return items.map(i => ({
+          id: i.url.split('watch?v=')[1],
+          title: i.title, by: i.uploaderName || '', thumb: i.thumbnail || ''
+        }));
+      } catch {}
+    }
+    return null;
+  }
+
+  function render(hits){
+    resultsEl.innerHTML = '';
+    hits.forEach(h => {
+      const b = document.createElement('button');
+      b.className = 'hit';
+      b.innerHTML =
+        (h.thumb ? '<img alt="" src="' + h.thumb + '">' : '') +
+        '<span class="t"><b></b><span></span></span>' +
+        '<span class="go">watch?v=' + h.id.slice(0,6) + '…</span>';
+      b.querySelector('b').textContent = h.title;
+      b.querySelector('.t span').textContent = h.by;
+      b.onclick = () => window.open('https://www.youtube.com/watch?v=' + h.id, '_blank', 'noopener');
+      resultsEl.appendChild(b);
+    });
+  }
+})();
+</script>
+</body>
+</html>

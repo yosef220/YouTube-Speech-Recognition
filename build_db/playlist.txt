@@ -1,0 +1,9 @@
+# HumFinder — songs to index into the melody database.
+# One YouTube URL per line. Lines starting with # are ignored.
+#
+# Tip from the plan: a small, personal database (300-800 songs you actually
+# search for) feels great; trying to cover all of YouTube feels broken.
+#
+# Examples (replace with your own):
+# https://www.youtube.com/watch?v=dQw4w9WgXcQ
+# https://www.youtube.com/watch?v=9bZkp7q19f0

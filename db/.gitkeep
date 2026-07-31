@@ -1,0 +1,2 @@
+# The melody database (melodies.npy + meta.json) is generated here by
+# build_db/ingest.py. It is intentionally not committed — build it locally.

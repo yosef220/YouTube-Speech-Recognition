@@ -1,3 +1,18 @@
 .DS_Store
 node_modules/
 *.log
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+venv/
+
+# Generated melody database (build locally with build_db/ingest.py)
+db/melodies.npy
+db/meta.json
+
+# Downloaded / working audio
+*.wav
+*.webm
+*.mp3

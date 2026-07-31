@@ -1,0 +1,11 @@
+# HumFinder matching server
+fastapi>=0.110
+uvicorn[standard]>=0.29
+python-multipart>=0.0.9   # required by FastAPI for file uploads
+numpy>=1.24
+soundfile>=0.12           # fast decode for wav/ogg/flac
+librosa>=0.10             # fallback decode (webm/opus via ffmpeg) + pyin pitch
+
+# Optional but recommended for best pitch tracking (used automatically if present):
+# torch>=2.0
+# torchcrepe>=0.0.22
