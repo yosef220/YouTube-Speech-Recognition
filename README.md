@@ -74,9 +74,13 @@ python3 -m http.server 8000
 ### אירוח חינמי — GitHub Pages (מובנה)
 בריפו כבר יש `.github/workflows/pages.yml` שמפרסם את `web/` אוטומטית:
 
-1. ב-GitHub: **Settings → Pages → Source: GitHub Actions**.
-2. דחפו ל-`main`/`master`. ה-Action בונה ומפרסם, והכתובת תופיע ב-**Actions → Deploy web/ to GitHub Pages**
-   (בדרך כלל `https://<user>.github.io/<repo>/`). כולל `https`, שנדרש למיקרופון.
+1. ב-GitHub: **Settings → Pages → Source: GitHub Actions** (חד-פעמי).
+2. כל דחיפה ל**ברירת-המחדל של ה-repo** מפרסמת אוטומטית. שימו לב: סביבת
+   `github-pages` מרשה לפרוס **רק מברנץ ברירת המחדל**, ולכן ה-workflow מכוון אליו
+   (`claude/humming-song-search-ace9y4`). כדי לפרסם מ-`main`: הפכו אותו לברירת
+   המחדל (**Settings → General → Default branch**) ואז שנו את ה-`branches` ב-workflow ל-`[main]`.
+3. הכתובת תופיע ב-**Actions → Deploy web/ to GitHub Pages** — בדרך כלל
+   `https://<user>.github.io/<repo>/`. כולל `https`, שנדרש למיקרופון.
 
 לחלופין: Cloudflare Pages / Netlify — הצביעו על תיקיית `web/`, בלי שלב build.
 

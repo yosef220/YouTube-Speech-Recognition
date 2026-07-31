@@ -4,10 +4,13 @@ name: Deploy web/ to GitHub Pages
 # to the default branch. No build step — it's a single self-contained HTML file.
 on:
   push:
-    # The github-pages environment only allows the repo's DEFAULT branch to
-    # deploy. This repo's default is currently claude/humming-song-search-ace9y4,
-    # so it's listed here alongside main/master (for when main becomes default).
-    branches: [main, master, claude/humming-song-search-ace9y4]
+    # The github-pages environment only lets the repo's DEFAULT branch deploy;
+    # a push from any other branch is rejected by that rule. This repo's default
+    # is claude/humming-song-search-ace9y4, so only it is listed here — that
+    # keeps every triggered run deployable (no failing/cancelled noise).
+    # To publish from `main` instead: make `main` the default branch
+    # (Settings → General → Default branch), then change this to [main].
+    branches: [claude/humming-song-search-ace9y4]
   workflow_dispatch:
 
 permissions:
