@@ -344,36 +344,63 @@
     return '<a href="' + url + '" download="hum.webm">הורד את הקובץ</a>';
   }
 
-  /* ---------- text → exact YouTube link ---------- */
+  /* ---------- text → YouTube link ----------
+     Order of resolution: your API key (exact, reliable) → public Piped →
+     public Invidious. Public instances die often, so if all of them fail we
+     STILL return a working result: a card that opens the YouTube search for the
+     identified song (its first result is essentially always the right video).
+     That way the user never sees a dead "not found". */
   const PIPED = [
     'https://pipedapi.kavin.rocks',
-    'https://api.piped.private.coffee',
-    'https://pipedapi.adminforge.de'
+    'https://pipedapi.adminforge.de',
+    'https://api.piped.yt',
+    'https://pipedapi.leptons.xyz',
+    'https://piped-api.lunar.icu'
   ];
+  const INVIDIOUS = [
+    'https://invidious.nerdvpn.de',
+    'https://inv.nadeko.net',
+    'https://yewtu.be',
+    'https://invidious.jing.rocks'
+  ];
+
+  function searchHit(query, label){
+    return {
+      open: 'https://www.youtube.com/results?search_query=' + encodeURIComponent(query),
+      title: label || query,
+      by: 'פתח תוצאות ביוטיוב',
+      thumb: ''
+    };
+  }
+  async function resolveYouTube(q){
+    return (await viaYouTubeApi(q)) || (await viaPiped(q)) || (await viaInvidious(q));
+  }
 
   async function lookup(text){
     statusEl.textContent = 'מחפש…';
-    let query = '"' + text + '" שיר';
+    let query = text, label = null;
 
     // אימות מול LRCLIB: אם מזוהה שיר, מחפשים לפי שם ואמן — הרבה יותר מדויק
     try {
       const r = await fetch('https://lrclib.net/api/search?q=' + encodeURIComponent(text));
       if (r.ok){
         const j = await r.json();
-        if (Array.isArray(j) && j.length) query = j[0].artistName + ' ' + j[0].trackName;
+        if (Array.isArray(j) && j.length){
+          query = j[0].artistName + ' ' + j[0].trackName;
+          label = j[0].trackName + ' — ' + j[0].artistName;
+        }
       }
     } catch {}
 
-    let hits = await viaYouTubeApi(query) || await viaPiped(query);
-
-    if (!hits || !hits.length){
-      statusEl.innerHTML = 'לא הצלחתי לשלוף תוצאה ישירה. ' +
-        '<a target="_blank" rel="noopener" href="https://www.youtube.com/results?search_query=' +
-        encodeURIComponent(query) + '">פתח חיפוש ביוטיוב</a>';
+    const hits = await resolveYouTube(query);
+    if (hits && hits.length){
+      render(hits);
+      statusEl.textContent = 'בחר תוצאה כדי לפתוח ביוטיוב';
       return;
     }
-    render(hits);
-    statusEl.textContent = 'בחר תוצאה כדי לפתוח ביוטיוב';
+    // never a dead end — a guaranteed, clickable YouTube-search result
+    render([ searchHit(query, '▶ ' + (label || text)) ]);
+    statusEl.textContent = 'פתח את התוצאה כדי לראות אותה ביוטיוב';
   }
 
   /* ---------- sung words → fuzzy match against lyrics → exact link ---------- */
@@ -431,13 +458,12 @@
     // Need at least a couple of sung words to land in the lyrics to trust it.
     if (best && bestScore >= Math.min(3, sung.length)){
       const q = best.artistName + ' ' + best.trackName;
-      heardEl.textContent = best.trackName + ' — ' + best.artistName +
-        '  (' + bestScore + '/' + sung.length + ' מילים תואמות)';
-      const hits = await viaYouTubeApi(q) || await viaPiped(q);
+      const label = best.trackName + ' — ' + best.artistName;
+      heardEl.textContent = label + '  (' + bestScore + '/' + sung.length + ' מילים תואמות)';
+      const hits = await resolveYouTube(q);
       if (hits && hits.length){ render(hits); statusEl.textContent = 'בחר תוצאה כדי לפתוח ביוטיוב'; return; }
-      statusEl.innerHTML = 'זוהה: <b>' + q + '</b>. ' +
-        '<a target="_blank" rel="noopener" href="https://www.youtube.com/results?search_query=' +
-        encodeURIComponent(q) + '">פתח ביוטיוב</a>';
+      render([ searchHit(q, '▶ ' + label) ]);        // never a dead end
+      statusEl.textContent = 'פתח את התוצאה כדי לראות אותה ביוטיוב';
       return;
     }
     // No confident lyric hit — fall back to the plain text→link path.
@@ -477,18 +503,38 @@
     return null;
   }
 
+  async function viaInvidious(q){
+    for (const base of INVIDIOUS){
+      try {
+        const r = await fetch(base + '/api/v1/search?type=video&q=' + encodeURIComponent(q));
+        if (!r.ok) continue;
+        const j = await r.json();
+        const items = (Array.isArray(j) ? j : []).filter(i => i.videoId).slice(0, 5);
+        if (!items.length) continue;
+        return items.map(i => ({
+          id: i.videoId, title: i.title, by: i.author || '',
+          thumb: (i.videoThumbnails && i.videoThumbnails.length && i.videoThumbnails[0].url) || ''
+        }));
+      } catch {}
+    }
+    return null;
+  }
+
   function render(hits){
     resultsEl.innerHTML = '';
     hits.forEach(h => {
       const b = document.createElement('button');
       b.className = 'hit';
+      const url = h.open || ('https://www.youtube.com/watch?v=' + h.id);
+      const go  = h.open ? '▶ YouTube' : ('watch?v=' + (h.id || '').slice(0, 6) + '…');
       b.innerHTML =
         (h.thumb ? '<img alt="" src="' + h.thumb + '">' : '') +
         '<span class="t"><b></b><span></span></span>' +
-        '<span class="go">watch?v=' + h.id.slice(0,6) + '…</span>';
+        '<span class="go"></span>';
       b.querySelector('b').textContent = h.title;
       b.querySelector('.t span').textContent = h.by;
-      b.onclick = () => window.open('https://www.youtube.com/watch?v=' + h.id, '_blank', 'noopener');
+      b.querySelector('.go').textContent = go;
+      b.onclick = () => window.open(url, '_blank', 'noopener');
       resultsEl.appendChild(b);
     });
   }
